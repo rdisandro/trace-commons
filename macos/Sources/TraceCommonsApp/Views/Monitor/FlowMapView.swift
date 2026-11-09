@@ -80,7 +80,7 @@ struct FlowMapView: View {
                 GlassAnimationTimeline(minimumInterval: resting.interval, paused: resting.paused) { date in
                     ZStack(alignment: .topLeading) {
                         Canvas { context, _ in
-                            drawArcs(in: &context, fit: fit, phase: reduceMotion ? 0 : date.timeIntervalSinceReferenceDate * 18)
+                            drawArcs(in: &context, fit: fit, phase: reduceMotion ? 0 : Self.dashPhase(at: date))
                         }
                         .accessibilityHidden(true)
 
@@ -243,6 +243,21 @@ struct FlowMapView: View {
         return (dashes ? 1 / 30 : GlassLibraryStation.frameInterval, !(dashes || turns))
     }
 
+    /// A flowing arc's dashes, in map units: 4 drawn, 8 gap.
+    static let flowDash: (on: Double, off: Double) = (4, 8)
+    /// How fast a flowing arc's dashes run, in map units a second.
+    static let flowSpeed: Double = 18
+
+    /// How far the flowing dashes have run at `date`, wrapped to one dash
+    /// pattern, so the dashes look the same and the motion is seamless.
+    /// Unwrapped, the seconds since the reference date times the speed is
+    /// about 1.5e10, beyond what the stroke's dash phase keeps to a
+    /// fraction: the dashes stood still and jumped about once a minute.
+    static func dashPhase(at date: Date) -> Double {
+        (date.timeIntervalSinceReferenceDate * flowSpeed)
+            .truncatingRemainder(dividingBy: flowDash.on + flowDash.off)
+    }
+
     /// What the still layer is drawn from: when none of it changes, the
     /// nodes, names and logos are not drawn again.
     private func stillKey(fit: FlowMapGeometry) -> FlowMapStillKey {
@@ -291,7 +306,8 @@ struct FlowMapView: View {
                 context.stroke(path, with: .color(GlassTokens.Color.statusOn.color.opacity(0.35 * arc.dim)), lineWidth: width)
                 context.stroke(path, with: .color(GlassTokens.Color.statusOn.color.opacity(arc.dim)),
                                style: StrokeStyle(lineWidth: width * 1.3, lineCap: .round,
-                                                  dash: [4 * fit.scale, 8 * fit.scale], dashPhase: -phase * fit.scale))
+                                                  dash: [Self.flowDash.on * fit.scale, Self.flowDash.off * fit.scale],
+                                                  dashPhase: -phase * fit.scale))
             }
         }
     }
